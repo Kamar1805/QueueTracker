@@ -6,6 +6,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .login-form {
@@ -14,7 +16,7 @@
   color: white;
   padding: 30px 40px;
   border-radius: 16px;
-  width: 90%;
+  width: 100%;
   max-width: 400px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   animation: fadeInUp 0.6s ease forwards;
@@ -24,15 +26,17 @@
   text-align: center;
   margin-bottom: 20px;
   color: #bbdefb;
+  font-size: 26px;
 }
 
 .login-form input {
   width: 100%;
-  padding: 10px 14px;
+  padding: 12px 16px;
   margin-bottom: 15px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 16px;
+  box-sizing: border-box;
 }
 
 .login-form input::placeholder {
@@ -45,15 +49,15 @@
   background-color: #1976d2;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 16px;
   cursor: pointer;
+  transition: background 0.3s ease;
 }
 
 .login-form button:hover {
   background-color: #1565c0;
 }
-
 
 @keyframes fadeInUp {
   0% {
@@ -66,25 +70,29 @@
   }
 }
 
+/* ✅ Fully responsive for small devices */
 @media (max-width: 480px) {
-  .signup-form,
   .login-form {
     padding: 20px;
     border-radius: 12px;
   }
 
-  .signup-form h2,
   .login-form h2 {
-    font-size: 24px;
+    font-size: 22px;
   }
 
-  .signup-form button,
-  .login-form button {
-    padding: 10px;
+  .login-form input {
     font-size: 15px;
+    padding: 10px 14px;
+  }
+
+  .login-form button {
+    font-size: 15px;
+    padding: 10px;
   }
 }
 
+/* Optional spinner style */
 .mini-spinner {
   width: 18px;
   height: 18px;
