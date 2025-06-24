@@ -1,0 +1,94 @@
+.login-container {
+  height: 100vh;
+  width: 100vw;
+  background: url('/queue-bg.png') no-repeat center center fixed;
+  background-size: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-form {
+  background: rgba(0, 0, 50, 0.6); /* glass effect */
+  backdrop-filter: blur(100px);
+  color: white;
+  padding: 30px 40px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  animation: fadeInUp 0.6s ease forwards;
+}
+
+.login-form h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #bbdefb;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 10px 14px;
+  margin-bottom: 15px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.login-form input::placeholder {
+  color: #ddd;
+}
+
+.login-form button {
+  width: 100%;
+  padding: 12px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.login-form button:hover {
+  background-color: #1565c0;
+}
+
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .signup-form,
+  .login-form {
+    padding: 20px;
+    border-radius: 12px;
+  }
+
+  .signup-form h2,
+  .login-form h2 {
+    font-size: 24px;
+  }
+
+  .signup-form button,
+  .login-form button {
+    padding: 10px;
+    font-size: 15px;
+  }
+}
+
+.mini-spinner {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  vertical-align: middle;
+  animation: spin 1s linear infinite;
+}
