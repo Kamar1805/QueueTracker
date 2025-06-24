@@ -116,7 +116,19 @@ export default function AdminDashboard() {
               {queues.map(queue => (
                 <li key={queue.id}>
                   <h4>{queue.name}</h4>
-                  <p>ID: {queue.id}</p>
+                  <p>
+  ID: {queue.id}{' '}
+  <button
+    className="copy-btn"
+    onClick={() => {
+      navigator.clipboard.writeText(queue.id);
+      alert('Queue ID copied to clipboard!');
+    }}
+  >
+    📋 Copy
+  </button>
+</p>
+
                   <p>People in queue: {queue.users.length}</p>
 
                   <p>

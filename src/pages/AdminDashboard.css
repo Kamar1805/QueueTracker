@@ -209,3 +209,17 @@ header h2 {
     width: 100%;
   }
 }
+.copy-btn {
+  margin-left: 8px;
+  background-color: #00acc1;
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.copy-btn:hover {
+  background-color: #00838f;
+}
