@@ -18,12 +18,12 @@ export default defineConfig({
         theme_color: '#1976d2',
         icons: [
           {
-            src: '/icon-192.png',
+            src: '/queuetrackr-logo.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: '/icon-512.png',
+            src: '/queuetrackr2.png',
             sizes: '512x512',
             type: 'image/png',
           },
