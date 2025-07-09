@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 import Loader from './components/Loader'; // ✅ import loader
 
+
 function App() {
   const { loading } = useAuth();
 
@@ -18,6 +19,7 @@ function App() {
       <Route path="/" element={<Welcome />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/login" element={<Login />} />
+      
 
       <Route
         path="/admin"
