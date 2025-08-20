@@ -13,8 +13,8 @@ import {
   onSnapshot,
   Timestamp,
   getDocs,         // added
-  runTransaction,   // added
-  arrayRemove            // ADD
+  runTransaction   // added
+  // removed arrayRemove
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import './AdminDashboard.css';
@@ -33,6 +33,9 @@ export default function AdminDashboard() {
   const [loggingOut, setLoggingOut] = useState(false); // NEW
   const [actionFor, setActionFor] = useState(null); // which queue shows the action menu
 
+  // Prevent duplicate auto-advance transactions per queue
+  const autoAdvancingRef = useRef(new Set()); // NEW
+
   useEffect(() => {
     const isAndroid = /Android/i.test(navigator.userAgent);
     if (isAndroid) {
@@ -40,7 +43,6 @@ export default function AdminDashboard() {
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) el.blur();
     }
   }, []);
-
 
   // Live updates for admin's queues
   useEffect(() => {
@@ -83,7 +85,83 @@ export default function AdminDashboard() {
     if (queues.length) clearIfExpired();
   }, [queues]);
 
-  
+  // Auto-advance when the "Awaiting arrival" countdown hits zero
+  useEffect(() => {
+    if (!queues?.length) return;
+
+    const tryAutoAdvance = async (q) => {
+      const id = q.docId;
+      if (autoAdvancingRef.current.has(id)) return;
+      autoAdvancingRef.current.add(id);
+      const queueRef = doc(db, 'queues', id);
+
+      try {
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(queueRef);
+          if (!snap.exists()) return;
+          const curr = snap.data();
+
+          if (!curr.hasStarted || curr.isOnBreak) return;
+
+          const ends = curr.nextLockUntil?.toMillis
+            ? curr.nextLockUntil.toMillis()
+            : Number(curr.nextLockUntil);
+
+          // Only proceed if a lock existed and is now expired
+          if (!ends || ends > Date.now()) return;
+
+          const users = Array.isArray(curr.users) ? curr.users : [];
+          const total = users.length;
+          const currIdx = Math.max(0, curr.currentIndex ?? 0);
+
+          // Nothing to serve; clear lock
+          if (total === 0 || currIdx >= total) {
+            tx.update(queueRef, { nextLockUntil: null });
+            return;
+          }
+
+          // Update rolling average
+          const nowMs = Date.now();
+          const prevMs = curr.lastAdvanceAt?.toMillis ? curr.lastAdvanceAt.toMillis() : null;
+          let avg = curr.avgServeMs ?? 180000;
+          let samples = curr.samples ?? 0;
+
+          if (prevMs && nowMs > prevMs) {
+            const diff = nowMs - prevMs;
+            if (diff > 0 && diff < 4 * 60 * 60 * 1000) {
+              avg = Math.round(((avg * samples) + diff) / (samples + 1));
+              samples += 1;
+            }
+          }
+
+          // Skip current; move pointer forward and start a new 2-min window for the new person
+          const nextIndex = Math.min(currIdx + 1, total);
+          const hasNext = nextIndex < total;
+          const lock = hasNext ? Timestamp.fromMillis(nowMs + 2 * 60 * 1000) : null;
+
+          tx.update(queueRef, {
+            currentIndex: nextIndex,
+            nextLockUntil: lock,
+            lastAdvanceAt: Timestamp.fromMillis(nowMs),
+            avgServeMs: avg,
+            samples
+          });
+        });
+      } finally {
+        setTimeout(() => autoAdvancingRef.current.delete(id), 300);
+      }
+    };
+
+    for (const q of queues) {
+      if (!q.hasStarted || q.isOnBreak) continue;
+      if (!q.nextLockUntil) continue;
+
+      const ends = q.nextLockUntil?.toMillis ? q.nextLockUntil.toMillis() : Number(q.nextLockUntil);
+      if (ends && ends <= Date.now()) {
+        tryAutoAdvance(q);
+      }
+    }
+  }, [queues, now]);
 
   const handleCreateQueue = async () => {
     if (!queueName.trim() || !user) return;
@@ -101,7 +179,7 @@ export default function AdminDashboard() {
         alert('Could not generate a unique Queue ID. Please try again.');
         return;
       }
-  
+
       const newQueue = {
         name: queueName.trim(),
         id: candidate,
@@ -123,14 +201,12 @@ export default function AdminDashboard() {
     }
   };
 
-
   const handleEndQueue = async (docId) => {
     const confirmed = window.confirm('End this queue? This cannot be undone.');
     if (confirmed) {
       await deleteDoc(doc(db, 'queues', docId));
     }
   };
-
 
   const handleViewUsers = async (queue) => {
     const idx = queue.currentIndex ?? 0;
@@ -173,21 +249,21 @@ export default function AdminDashboard() {
   };
 
   // Allow proceeding immediately if the person arrives before countdown ends
-const handleProceedNow = async (queue) => {
-      try {
-        await updateDoc(doc(db, 'queues', queue.docId), { nextLockUntil: null });
-      } catch (e) {
-       alert('Failed to proceed. Please try again.');
-     }
-   };
+  const handleProceedNow = async (queue) => {
+    try {
+      await updateDoc(doc(db, 'queues', queue.docId), { nextLockUntil: null });
+    } catch (e) {
+      alert('Failed to proceed. Please try again.');
+    }
+  };
 
-   const timeRemaining = (queue) => {
+  const timeRemaining = (queue) => {
     if (!queue.breakEndsAt) return 0;
     const ends = queue.breakEndsAt?.toMillis ? queue.breakEndsAt.toMillis() : Number(queue.breakEndsAt);
     return Math.max(0, ends - now);
   };
 
-const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
+  const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
     if (!queue.nextLockUntil) return 0;
     const ends = queue.nextLockUntil.toMillis ? queue.nextLockUntil.toMillis() : Number(queue.nextLockUntil);
     return Math.max(0, ends - now);
@@ -201,7 +277,7 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
     const s = total % 60;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
-  // ...
+
   const handleLogout = async () => { // NEW
     try {
       setLoggingOut(true);
@@ -223,39 +299,36 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
       samples: initSamples,
     });
   };
-  
-  // Move to next: update rolling average and timing
+
+  // Move to next: pointer-only, update rolling average and timing
   const handleMoveNext = async (queue) => {
     if (queue.isOnBreak || isNextLocked(queue)) return;
-  
+
     const queueRef = doc(db, 'queues', queue.docId);
     try {
       await runTransaction(db, async (tx) => {
         const snap = await tx.get(queueRef);
         if (!snap.exists()) throw new Error('Queue not found');
         const q = snap.data();
-  
+
         if (!q.hasStarted) throw new Error('Queue not started');
         if (q.isOnBreak) throw new Error('Queue on break');
-  
+
         const lockUntil = q.nextLockUntil?.toMillis ? q.nextLockUntil.toMillis() : Number(q.nextLockUntil);
         if (lockUntil && lockUntil > Date.now()) throw new Error('Awaiting arrival (locked)');
-  
+
         const users = Array.isArray(q.users) ? q.users : [];
         const total = users.length;
-        const currIdx = q.currentIndex ?? 0;
-  
+        const currIdx = Math.max(0, q.currentIndex ?? 0);
+
         if (total === 0 || currIdx >= total) throw new Error('No more users in the queue');
-  
-        // UID being served right now
-        const servedUid = users[currIdx];
-  
+
         // Update rolling average
         const nowMs = Date.now();
         const prevMs = q.lastAdvanceAt?.toMillis ? q.lastAdvanceAt.toMillis() : null;
         let avg = q.avgServeMs ?? 180000;
         let samples = q.samples ?? 0;
-  
+
         if (prevMs && nowMs > prevMs) {
           const diff = nowMs - prevMs;
           if (diff > 0 && diff < 4 * 60 * 60 * 1000) {
@@ -263,25 +336,18 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
             samples += 1;
           }
         }
-  
-        // 2-min arrival window for the next person
-        const lock = Timestamp.fromMillis(nowMs + 2 * 60 * 1000);
-  
-        // After removing one user, newTotal = total - 1
-        const newTotal = total - 1;
-  
-        // Keep currentIndex stable so the next person shifts into the same index.
-        // If queue becomes empty, set currentIndex to 0 (no one to serve).
-        const nextIndex =
-          newTotal > currIdx ? currIdx : 0;
-  
+
+        // Advance pointer; clamp if someone left concurrently
+        const nextIndex = Math.min(currIdx + 1, total);
+        const hasNext = nextIndex < total;
+        const lock = hasNext ? Timestamp.fromMillis(nowMs + 2 * 60 * 1000) : null;
+
         tx.update(queueRef, {
-          users: arrayRemove(servedUid),
           currentIndex: nextIndex,
-          nextLockUntil: newTotal > 0 ? lock : null,
+          nextLockUntil: lock,
           lastAdvanceAt: Timestamp.fromMillis(nowMs),
           avgServeMs: avg,
-          samples: samples,
+          samples
         });
       });
     } catch (e) {
@@ -290,8 +356,6 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
     }
     setActionFor(null);
   };
-
-  
 
   return (
     <div className="admin-dashboard">
@@ -323,7 +387,7 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
           </div>
           <div className="panel-body">
             <div className="row">
-             <input
+              <input
                 className="input"
                 type="text"
                 placeholder="Enter queue name"
@@ -351,7 +415,6 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
             <p className="empty">No active queues yet.</p>
           ) : (
             <ul className="queue-grid">
-              
               {queues.map((q) => {
                 const hasStarted = Boolean(q.hasStarted);
                 const onBreak = Boolean(q.isOnBreak);
@@ -388,48 +451,48 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
                     </div>
 
                     <div className="queue-meta">
-  <div className="meta">
-    <span className="label">Queue ID</span>
-    <span className="value">
-      {q.id}{' '}
-      <button
-        className="copy-btn"
-        onClick={() => {
-          navigator.clipboard.writeText(q.id);
-          alert('Queue ID copied.');
-        }}
-        aria-label="Copy queue ID"
-      >
-        COPY
-      </button>
-    </span>
-  </div>
+                      <div className="meta">
+                        <span className="label">Queue ID</span>
+                        <span className="value">
+                          {q.id}{' '}
+                          <button
+                            className="copy-btn"
+                            onClick={() => {
+                              navigator.clipboard.writeText(q.id);
+                              alert('Queue ID copied.');
+                            }}
+                            aria-label="Copy queue ID"
+                          >
+                            COPY
+                          </button>
+                        </span>
+                      </div>
 
-  <div className="meta">
-    <span className="label">People in queue</span>
-    <span className="value">{activeCount}</span>
-  </div>
+                      <div className="meta">
+                        <span className="label">People in queue</span>
+                        <span className="value">{activeCount}</span>
+                      </div>
 
-  <div className="meta">
-    <span className="label">Currently serving</span>
-    <span className="value">
-      {!hasStarted
-        ? 'Not started yet'
-        : total > 0 && currIdx < total
-        ? `#${currIdx + 1}`
-        : 'None'}
-    </span>
-  </div>
+                      <div className="meta">
+                        <span className="label">Currently serving</span>
+                        <span className="value">
+                          {!hasStarted
+                            ? 'Not started yet'
+                            : total > 0 && currIdx < total
+                            ? `#${currIdx + 1}`
+                            : 'None'}
+                        </span>
+                      </div>
 
-  <div className="meta">
-    <span className="label">Queue Speed</span>
-    <span className="value">
-      {q.samples > 0 && q.avgServeMs
-        ? `${fmt(q.avgServeMs)} / person`
-        : 'Learning…'}
-    </span>
-  </div>
-</div>
+                      <div className="meta">
+                        <span className="label">Queue Speed</span>
+                        <span className="value">
+                          {q.samples > 0 && q.avgServeMs
+                            ? `${fmt(q.avgServeMs)} / person`
+                            : 'Learning…'}
+                        </span>
+                      </div>
+                    </div>
                     <div className="divider" />
 
                     <div className="queue-actions">
@@ -561,12 +624,7 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
                       </div>
                     )}
 
-                    {/* Show no-show countdown hint */}
-                    
-                     {/* ...existing actions... */}
-
-                    {/* Show no-show countdown hint (kept single detailed version) */}
-                    {/* Removed the simpler duplicate line */}
+                    {/* Show no-show countdown hint (when locked) */}
                     {locked && hasStarted && !onBreak && (
                       <div className="no-show-hint" role="status" aria-live="polite">
                         <div className="hint-text">
@@ -624,5 +682,4 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
       <Footer />
     </div>
   );
-// ...existing code...
 }
