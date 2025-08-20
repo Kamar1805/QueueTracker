@@ -10,17 +10,6 @@ export default function Footer() {
         <p className="footer-copy">
           Built for campuses, banks and every commercial infrastructure that value time and clarity.
         </p>
-        <div className="footer-actions">
-          <button className="btn btn-text" onClick={() => navigate('/login', { state: { showLoader: true } })}>
-            Sign In
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => navigate('/signup', { state: { showLoader: true } })}
-          >
-            Get Started
-          </button>
-        </div>
       </div>
 
       <div className="container footer-legal">

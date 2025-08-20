@@ -13,7 +13,8 @@ import {
   onSnapshot,
   Timestamp,
   getDocs,         // added
-  runTransaction   // added
+  runTransaction,   // added
+  arrayRemove            // ADD
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import './AdminDashboard.css';
@@ -224,55 +225,71 @@ const lockRemaining = (queue) => { // NEW: remaining ms for no-show lock
   };
   
   // Move to next: update rolling average and timing
-const handleMoveNext = async (queue) => {
-  if (queue.isOnBreak || isNextLocked(queue)) return;
-
-  const queueRef = doc(db, 'queues', queue.docId);
-  try {
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(queueRef);
-      if (!snap.exists()) throw new Error('Queue not found');
-      const q = snap.data();
-
-      if (!q.hasStarted) throw new Error('Queue not started'); // defensive
-      if (q.isOnBreak) throw new Error('Queue on break');
-      const nextLockUntil = q.nextLockUntil?.toMillis ? q.nextLockUntil.toMillis() : Number(q.nextLockUntil);
-      if (nextLockUntil && nextLockUntil > Date.now()) throw new Error('Awaiting arrival (locked)');
-
-      const total = (q.users || []).length;
-      const currIdx = q.currentIndex ?? 0;
-      const nextIndex = currIdx + 1;
-      if (nextIndex >= total) throw new Error('No more users in the queue');
-
-      const nowMs = Date.now();
-      const prevMs = q.lastAdvanceAt?.toMillis ? q.lastAdvanceAt.toMillis() : null;
-      let avg = q.avgServeMs ?? 180000;
-      let samples = q.samples ?? 0;
-
-      if (prevMs && nowMs > prevMs) {
-        const diff = nowMs - prevMs;
-        if (diff > 0 && diff < 4 * 60 * 60 * 1000) {
-          avg = Math.round(((avg * samples) + diff) / (samples + 1));
-          samples += 1;
+  const handleMoveNext = async (queue) => {
+    if (queue.isOnBreak || isNextLocked(queue)) return;
+  
+    const queueRef = doc(db, 'queues', queue.docId);
+    try {
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(queueRef);
+        if (!snap.exists()) throw new Error('Queue not found');
+        const q = snap.data();
+  
+        if (!q.hasStarted) throw new Error('Queue not started');
+        if (q.isOnBreak) throw new Error('Queue on break');
+  
+        const lockUntil = q.nextLockUntil?.toMillis ? q.nextLockUntil.toMillis() : Number(q.nextLockUntil);
+        if (lockUntil && lockUntil > Date.now()) throw new Error('Awaiting arrival (locked)');
+  
+        const users = Array.isArray(q.users) ? q.users : [];
+        const total = users.length;
+        const currIdx = q.currentIndex ?? 0;
+  
+        if (total === 0 || currIdx >= total) throw new Error('No more users in the queue');
+  
+        // UID being served right now
+        const servedUid = users[currIdx];
+  
+        // Update rolling average
+        const nowMs = Date.now();
+        const prevMs = q.lastAdvanceAt?.toMillis ? q.lastAdvanceAt.toMillis() : null;
+        let avg = q.avgServeMs ?? 180000;
+        let samples = q.samples ?? 0;
+  
+        if (prevMs && nowMs > prevMs) {
+          const diff = nowMs - prevMs;
+          if (diff > 0 && diff < 4 * 60 * 60 * 1000) {
+            avg = Math.round(((avg * samples) + diff) / (samples + 1));
+            samples += 1;
+          }
         }
-      }
-
-      const lock = Timestamp.fromMillis(nowMs + 2 * 60 * 1000);
-
-      tx.update(queueRef, {
-        currentIndex: nextIndex,
-        nextLockUntil: lock,
-        lastAdvanceAt: Timestamp.fromMillis(nowMs),
-        avgServeMs: avg,
-        samples: samples,
+  
+        // 2-min arrival window for the next person
+        const lock = Timestamp.fromMillis(nowMs + 2 * 60 * 1000);
+  
+        // After removing one user, newTotal = total - 1
+        const newTotal = total - 1;
+  
+        // Keep currentIndex stable so the next person shifts into the same index.
+        // If queue becomes empty, set currentIndex to 0 (no one to serve).
+        const nextIndex =
+          newTotal > currIdx ? currIdx : 0;
+  
+        tx.update(queueRef, {
+          users: arrayRemove(servedUid),
+          currentIndex: nextIndex,
+          nextLockUntil: newTotal > 0 ? lock : null,
+          lastAdvanceAt: Timestamp.fromMillis(nowMs),
+          avgServeMs: avg,
+          samples: samples,
+        });
       });
-    });
-  } catch (e) {
-    alert(e.message || 'Failed to move to next.');
-    return;
-  }
-  setActionFor(null);
-};
+    } catch (e) {
+      alert(e.message || 'Failed to move to next.');
+      return;
+    }
+    setActionFor(null);
+  };
 
   
 
