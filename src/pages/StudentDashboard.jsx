@@ -37,6 +37,8 @@ export default function StudentDashboard() {
   const prevPosRef = useRef(new Map()); // docId -> positionsAhead
   const audioRef = useRef(null);
   const audioCtxRef = useRef(null);
+  const [soundEnabled, setSoundEnabled] = useState(false); // NEW
+  
 
   // Simple user agent UX fix
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function StudentDashboard() {
   // Preload notification audio
   useEffect(() => {
     try {
-      audioRef.current = new Audio('/notify.mp3'); // place an mp3 in public/ if you have one
+      audioRef.current = new Audio('/notify.wav'); // ensure this exists in public/
       audioRef.current.preload = 'auto';
       audioRef.current.volume = 1.0;
     } catch {
@@ -58,20 +60,58 @@ export default function StudentDashboard() {
     }
   }, []);
 
-  const playBeep = async (freq = 880, durMs = 350) => {
+  // One-time unlock: call from a real user click/tap
+  const unlockAudio = async () => {
     try {
-      if (!audioCtxRef.current) {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
+      // 1) Create/resume AudioContext
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtxRef.current && Ctx) {
         audioCtxRef.current = new Ctx();
       }
+      if (audioCtxRef.current?.state === 'suspended') {
+        await audioCtxRef.current.resume();
+      }
+
+      // 2) Prime the HTMLAudio element (muted play -> pause -> reset)
+      if (!audioRef.current) {
+        audioRef.current = new Audio('/notify.wav');
+        audioRef.current.preload = 'auto';
+        audioRef.current.volume = 1.0;
+      }
+      audioRef.current.muted = true;
+      try {
+        await audioRef.current.play();
+        await audioRef.current.pause();
+      } catch {
+        // ignore
+      }
+      audioRef.current.currentTime = 0;
+      audioRef.current.muted = false;
+
+      // 3) Ask for notification permission under gesture
+      if ('Notification' in window && Notification.permission === 'default') {
+        try { await Notification.requestPermission(); } catch {}
+      }
+
+      setSoundEnabled(true);
+    } catch {
+      // ignore
+    }
+  };
+
+  const playBeep = async (freq = 880, durMs = 350) => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtxRef.current && Ctx) audioCtxRef.current = new Ctx();
       const ctx = audioCtxRef.current;
+      if (!ctx) return; // no WebAudio support
       if (ctx.state === 'suspended') await ctx.resume();
 
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.value = freq;
-      gain.gain.value = 0.1;
+      gain.gain.value = 0.12;
 
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -88,15 +128,13 @@ export default function StudentDashboard() {
 
   const playDing = async (strong = false) => {
     try {
-      if (audioRef.current) {
+      if (audioRef.current && soundEnabled) {
         await audioRef.current.play();
-      } else {
-        // Fallback beep
+      } else if (soundEnabled) {
         await playBeep(strong ? 1200 : 880, strong ? 500 : 300);
       }
     } catch {
-      // Autoplay block: fallback to WebAudio beep
-      await playBeep(strong ? 1200 : 880, strong ? 500 : 300);
+      // ignore – likely blocked if not unlocked
     }
   };
 
@@ -333,6 +371,14 @@ export default function StudentDashboard() {
           {loggingOut ? 'Logging out…' : 'Logout'}
         </button>
       </header>
+
+      {!soundEnabled && (
+        <div className="toast toast-info" role="status" aria-live="polite">
+          <span>Enable sound and notifications</span>
+          <button className="btn btn-primary" onClick={unlockAudio}>Enable</button>
+        </div>
+      )}
+
 
       {completedBanner && (
         <div className="toast toast-success" role="status" aria-live="polite">

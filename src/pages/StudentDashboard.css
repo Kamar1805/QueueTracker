@@ -428,3 +428,31 @@ select.input,
   .sd-user { font-size: 13px; max-width: 55vw; }
   .brand-name { font-size: 13px; }
 }
+
+/* ...existing code... */
+
+/* Prevent iOS auto-zoom on focus by making controls >= 16px */
+input, textarea, select, button, .input {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+/* Optional: tighter iOS form defaults */
+input, textarea, select {
+  -webkit-text-size-adjust: 100%;
+  -webkit-appearance: none;
+}
+
+/* ...existing code... */
+
+/* ...existing code... */
+
+@media (max-width: 820px) {
+  /* Ensure controls are >=16px on phones to prevent zoom */
+  input, textarea, select, button, .input {
+    font-size: 16px;
+    line-height: 1.4;
+  }
+}
+
+/* ...existing code... */
