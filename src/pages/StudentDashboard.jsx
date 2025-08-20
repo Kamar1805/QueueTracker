@@ -38,7 +38,6 @@ export default function StudentDashboard() {
   const audioRef = useRef(null);
   const audioCtxRef = useRef(null);
   const [soundEnabled, setSoundEnabled] = useState(false); // NEW
-  
 
   // Simple user agent UX fix
   useEffect(() => {
@@ -128,9 +127,11 @@ export default function StudentDashboard() {
 
   const playDing = async (strong = false) => {
     try {
-      if (audioRef.current && soundEnabled) {
+      if (!soundEnabled) return;
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
         await audioRef.current.play();
-      } else if (soundEnabled) {
+      } else {
         await playBeep(strong ? 1200 : 880, strong ? 500 : 300);
       }
     } catch {
@@ -307,12 +308,12 @@ export default function StudentDashboard() {
 
       // Only react when it decreased
       if (prev != null && positionsAhead < prev) {
-        // General movement notice
         const positionLabel = `#${positionsAhead + 1}`;
         setNotice({ kind: 'info', text: `Queue moved in ${q.name}. You are now ${positionLabel}.` });
-        // Play a sound and, if permitted, show a system notification (helpful in background)
+        // Sound + background hints
         playDing(false);
         if (document.hidden) {
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
           sendNotification('Queue moved', `${q.name}: You are now ${positionLabel}.`);
         }
       }
@@ -321,6 +322,7 @@ export default function StudentDashboard() {
       if (prev !== 0 && positionsAhead === 0) {
         setNotice({ kind: 'now', text: `It’s your turn now in ${q.name}. Please proceed.` });
         playDing(true);
+        if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
         sendNotification('You are up now', `${q.name}: Please proceed.`);
       }
     }
@@ -378,7 +380,6 @@ export default function StudentDashboard() {
           <button className="btn btn-primary" onClick={unlockAudio}>Enable</button>
         </div>
       )}
-
 
       {completedBanner && (
         <div className="toast toast-success" role="status" aria-live="polite">
@@ -483,6 +484,7 @@ export default function StudentDashboard() {
                   ? `#${servingIdx + 1}. ${queue.userNames[servingIdx]}`
                   : 'None';
 
+                // Your live place in line (relative to the one currently serving)
                 const positionsAhead = yourIndex >= 0 ? Math.max(0, yourIndex - servingIdx) : null;
 
                 // Clamp avg to [5s, 60m] to avoid outliers
@@ -520,7 +522,9 @@ export default function StudentDashboard() {
                       </div>
                       <div className="meta">
                         <span className="label">Your Position</span>
-                        <span className="value">#{yourIndex + 1}</span>
+                        <span className="value">
+                          {yourIndex < 0 ? '—' : `#${(positionsAhead ?? 0) + 1}`}
+                        </span>
                       </div>
                       <div className="meta">
                         <span className="label">Currently Serving</span>

@@ -134,12 +134,17 @@ export default function AdminDashboard() {
             }
           }
 
-          // Skip current; move pointer forward and start a new 2-min window for the new person
-          const nextIndex = Math.min(currIdx + 1, total);
-          const hasNext = nextIndex < total;
+          // Remove current user by index and lock next for 2 minutes
+          const newUsers = users.slice(0, currIdx).concat(users.slice(currIdx + 1));
+          const newTotal = newUsers.length;
+
+          // Next to serve stays at same index if available; otherwise, no one (index == length)
+          const nextIndex = currIdx < newTotal ? currIdx : newTotal;
+          const hasNext = nextIndex < newTotal;
           const lock = hasNext ? Timestamp.fromMillis(nowMs + 2 * 60 * 1000) : null;
 
           tx.update(queueRef, {
+            users: newUsers,
             currentIndex: nextIndex,
             nextLockUntil: lock,
             lastAdvanceAt: Timestamp.fromMillis(nowMs),
@@ -300,7 +305,7 @@ export default function AdminDashboard() {
     });
   };
 
-  // Move to next: pointer-only, update rolling average and timing
+  // Move to next: remove current user by index, then lock next for 2 minutes
   const handleMoveNext = async (queue) => {
     if (queue.isOnBreak || isNextLocked(queue)) return;
 
@@ -337,12 +342,17 @@ export default function AdminDashboard() {
           }
         }
 
-        // Advance pointer; clamp if someone left concurrently
-        const nextIndex = Math.min(currIdx + 1, total);
-        const hasNext = nextIndex < total;
+        // Remove current user by index
+        const newUsers = users.slice(0, currIdx).concat(users.slice(currIdx + 1));
+        const newTotal = newUsers.length;
+
+        // Next index: same slot if available; else end (no one serving)
+        const nextIndex = currIdx < newTotal ? currIdx : newTotal;
+        const hasNext = nextIndex < newTotal;
         const lock = hasNext ? Timestamp.fromMillis(nowMs + 2 * 60 * 1000) : null;
 
         tx.update(queueRef, {
+          users: newUsers,
           currentIndex: nextIndex,
           nextLockUntil: lock,
           lastAdvanceAt: Timestamp.fromMillis(nowMs),
