@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import './StudentDashboard.css';
+import Footer from '../components/Footer';
 
 export default function StudentDashboard() {
   const { user, logout } = useAuth();
@@ -412,6 +413,8 @@ useEffect(() => {
           )}
         </section>
       </main>
+
+      <Footer />
 
      {confirmLeave && (
        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="leave-title">

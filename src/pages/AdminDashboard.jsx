@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import './AdminDashboard.css';
+import Footer from '../components/Footer';
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -602,6 +603,8 @@ const handleMoveNext = async (queue) => {
           </section>
         )}
       </main>
+
+      <Footer />
     </div>
   );
 // ...existing code...
