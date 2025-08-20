@@ -14,12 +14,19 @@ const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
+  const [signupNotice, setSignupNotice] = useState(Boolean(location.state?.signupSuccess)); // NEW
 
   useEffect(() => {
     if (!bootLoading) return;
     const t = setTimeout(() => setBootLoading(false), 700);
     return () => clearTimeout(t);
   }, [bootLoading]);
+
+  useEffect(() => {
+    if (!signupNotice) return;
+    const t = setTimeout(() => setSignupNotice(false), 6000); // auto-hide
+    return () => clearTimeout(t);
+  }, [signupNotice]);
 
   const handleChange = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -56,6 +63,13 @@ const Login = () => {
         </div>
       )}
 
+      {/* NEW: banner after signup redirect */}
+      {signupNotice && (
+        <div className="toast toast-success" role="status" aria-live="polite">
+          <span>Account created successfully. Please log in with your credentials.</span>
+          <button className="btn btn-text" onClick={() => setSignupNotice(false)}>Dismiss</button>
+        </div>
+      )}
 
       <header className="auth-header reveal fade-in-down slow">
         <button className="brand" onClick={() => navigate('/')}>
@@ -80,7 +94,6 @@ const Login = () => {
           </button>
         </div>
       </header>
-
 
       <main className="auth-main">
         <section className="auth-card reveal fade-in-up slow" style={{ animationDelay: '120ms' }}>
